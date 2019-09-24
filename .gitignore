@@ -1,0 +1,7 @@
+NEURON/x86_64
+*.pyc
+.ipynb_checkpoints/
+save
+*.db
+*.h5
+*.npy
