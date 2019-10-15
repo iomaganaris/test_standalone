@@ -21,7 +21,7 @@ NEURON_MOD_FOLDER = join(ROOT_FOLDER, "NEURON")
 HIGHD_FOLDER = ROOT_FOLDER
 linewidth_ = 0.1
 
-databases_file = join(HIGHD_FOLDER, "elecDB.db")
+databases_file = join(HIGHD_FOLDER, "ElecDB2.db")
 conn = sqlite3.connect(databases_file)
 cursor = conn.cursor()
 
@@ -93,42 +93,37 @@ def simulate(seed,  # random seed
     request = "select id from etypes where name='"+ etype + "'"
     cursor.execute(request)
     etype_id = np.array(cursor.fetchall())[:,0]
-    request = "select distinct is_excitatory, stype from connections join mtypes on connections.source_mtype = mtypes.id where target_etype="+ str(etype_id[0])
+    request = "select distinct is_excitatory, stype from connections join cell_types on connections.source_celltype = cell_types.id where target_etype="+ str(etype_id[0])
     cursor.execute(request)
     result = np.array(cursor.fetchall())
     stype_ids = result[:,1]
     receptorsIsExc = result[:,0]-1
     tested_gid = np.array([id_ for id_ in range((len(step_current) if step_current is not None else len(stype_ids)))])
     print("------------------------- Create Neurons ----------------------------------")
-    request = "select C_m, E_L, g_L, V_reset, V_th, V_peak, Delta_T, a, b, tau_w, t_ref from aeif_cond_beta_multisynapse where etype="+ str(etype_id[0])
+    request = "SELECT constants.value, parameters.name, constants.id FROM (select id, neuron_model from neuron_instances where etype="+ str(etype_id[0])+") as neuron_instances JOIN (SELECT * FROM neuron_models WHERE neuron_models.name like '%aeif_cond_beta_multisynapse%') as neuron_models ON neuron_instances.neuron_model=neuron_models.id JOIN neuron_instances_constants ON neuron_instances_constants.instance=neuron_instances.id JOIN constants ON neuron_instances_constants.constant=constants.id JOIN parameters ON constants.parameter=parameters.id order by constants.id"
     cursor.execute(request)
     result = cursor.fetchall()
     if len(result)<1:
         return
-    result = result[0]
-    neuron_parameters = {
-        "gid": tested_gid,
-        "C_m": [result[0]]*tested_gid.size,  # pF
-        "E_L": [result[1]]*tested_gid.size,  # mV
-        "g_L": [result[2]]*tested_gid.size,  # nS
-        "V_reset": [result[3]]*tested_gid.size,  # mV
-        "V_th": [result[4]]*tested_gid.size,  # mV
-        "V_peak": [result[5]]*tested_gid.size,  # mV
-        "Delta_T": [result[6]]*tested_gid.size,  # mV
-        "a": [result[7]]*tested_gid.size,  # nS
-        "b": [result[8]]*tested_gid.size,  # pA
-        "tau_w": [result[9]]*tested_gid.size,  # ms
-        "t_ref": [result[10]]*tested_gid.size,  # ms
-        "V_m": [-65.0]*tested_gid.size,  # mV
-        "I_e": [0.0]*tested_gid.size # [21.85]*tested_gid.size,  # pA
-    }
-    # print(neuron_parameters)
+    neuron_parameters = {}
+    for row in result:
+        if row[1] in neuron_parameters.keys():
+            neuron_parameters[row[1]] = np.vstack([neuron_parameters[row[1]], [float(row[0])]*tested_gid.size])
+        else:
+            neuron_parameters[row[1]] = [float(row[0])]*tested_gid.size
+    neuron_parameters["gid"] = tested_gid
+    neuron_parameters["V_m"] = [-65.0]*tested_gid.size  # mV
+    neuron_parameters["I_e"] = [0.0]*tested_gid.size # [21.85]*tested_gid.size,  # pA
+
+    # for k, v in neuron_parameters.items():
+    #     print(k, v)
     nest_sim.create_adex_neuron(neuron_parameters)
 
     pre_synaptic_parameters = {}
-    postsyn_params = {'E_rev': [0.0, 0.0, -80.0, -97.0],
-                     'tau_rise': [0.2, 0.29, 0.2, 3.5],
-                     'tau_decay': [1.7, 43.0, 8.0, 260.9]}
+    postsyn_params = {'E_rev': neuron_parameters['E_rev'][:,0],
+                     'tau_rise': neuron_parameters['tau_rise'][:,0],
+                     'tau_decay': neuron_parameters['tau_decay'][:,0]}
+    # print(postsyn_params)
     spike_times = []
     if step_current is None:
         print("-------------------------- Create synapses ------------------------------------")
