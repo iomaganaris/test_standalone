@@ -76,7 +76,6 @@ def main():
             if with_step_current:
                 standalone_input = standalone_input_
             simulate(seed, t_trial, n_trial, dt, OUTPUT_FOLDER, etype, standalone_input, print_plots)
-        break
 
 def simulate(seed,  # random seed
              t_trial,  # simulation time per trial in ms
@@ -129,19 +128,19 @@ def simulate(seed,  # random seed
         print("-------------------------- Create synapses ------------------------------------")
         params = None
         for stype_id in stype_ids:
-            request = "select * from tsodyks2_synapse where stype=" + str(stype_id)
+            request = "SELECT constants.value, parameters.name FROM (select id, synapse_model from synapse_instances where stype="+ str(stype_id)+") as synapse_instances JOIN (SELECT * FROM synapse_models WHERE synapse_models.name like '%tsodyks2_synapse%') as synapse_models ON synapse_instances.synapse_model=synapse_models.id JOIN synapse_instances_constants ON synapse_instances_constants.instance=synapse_instances.id JOIN constants ON synapse_instances_constants.constant=constants.id JOIN parameters ON constants.parameter=parameters.id order by parameters.name"
             cursor.execute(request)
             result = cursor.fetchall()
             if len(result)<1:
                 return
             elif params is None:
-                params = result[0]
+                params = np.array([float(row[0]) for row in result])
             else: 
-                params = np.vstack((params, result[0]))
+                params = np.vstack((params, np.array([float(row[0]) for row in result])))
 
         receptors = 3-receptorsIsExc*2 # conversion from EI to concrete receptor type
         indexes = np.where(receptors == 3)
-        params[:,1][indexes] = np.abs(params[:,1][indexes])
+        params[:,3][indexes] = np.abs(params[:,3][indexes])
         params = np.hstack((params, receptors.reshape((len(receptors), 1))))
         for neuron in nest_sim.neurons.values():
             nest_sim.setStatus(neuron,postsyn_params)
@@ -154,13 +153,13 @@ def simulate(seed,  # random seed
         for i in range(len(tested_gid)):
             pre_synaptic_parameters = {
                 "delay": [dt],  # in ms
-                "tau_rec": [params[i,7]],  # ms
-                "tau_fac": [params[i,5]],  # ms
-                "U": [params[i,3]],
+                "tau_rec": [params[i,2]],  # ms
+                "tau_fac": [params[i,1]],  # ms
+                "U": [params[i,0]],
                 'u': [0.5],
                 'x': [0.5],
-                'weight': [params[i,1]],
-                'receptor_type': [params[i,9]]
+                'weight': [params[i,3]],
+                'receptor_type': [params[i,4]]
             }
             nest_sim.create_synapse(pre_synaptic_parameters, nest_sim.source.keys(), tested_gid[i])
     else:
@@ -225,13 +224,13 @@ def load_neuron(seed, t_trial, n_trials, dt, gifs, presyn_params, postsyn_params
             for i, synapse in enumerate(presyn_params):
                 pre_synaptic_parameters = {
                     "delay": [dt],  # in ms
-                    "tau_rec": [synapse[7]],  # ms
-                    "tau_fac": [synapse[5]],  # ms
-                    "U": [synapse[3]],
+                    "tau_rec": [synapse[2]],  # ms
+                    "tau_fac": [synapse[1]],  # ms
+                    "U": [synapse[0]],
                     'u': [0.5],
                     'x': [0.5],
-                    'weight': [synapse[1]],
-                    'receptor_type': [synapse[9]]
+                    'weight': [synapse[3]],
+                    'receptor_type': [synapse[4]]
                 }
                 # print(pre_synaptic_parameters)
                 nrn_sim.create_synapse(pre_synaptic_parameters, nrn_sim.source.keys(), gifs["gid"][i])
