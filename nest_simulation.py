@@ -130,6 +130,8 @@ class NestSimulation(Simulation):
         multimeter = nest.Create("spike_detector", 1, params=params)
         nest.Connect(recording_point.values(), multimeter, syn_spec={'delay': self.dt})
         self.multimeter.append(multimeter)
+        for gid in recording_point.keys():
+            self.spikes[gid] = []
 
     def process_results(self):
         if self.to_file:
@@ -187,8 +189,6 @@ class NestSimulation(Simulation):
                             self.sim_time[gid].append(float(splitLine[1]))
                             # self.i_syn[gid].append(float(splitLine[4]))
                         elif "spike_detector-" in file_:
-                            if gid not in self.spikes:
-                                self.spikes[gid] = []
                             self.spikes[gid].append(float(splitLine[1]))
         for gid in self.v_m:
             self.v_m[gid] = np.array(self.v_m[gid][:num_points])
