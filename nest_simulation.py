@@ -3,7 +3,7 @@ import nest
 import numpy as np
 from os.path import isfile
 from simulation import Simulation
-import random
+
 
 class NestSimulation(Simulation):
     def __init__(self, t_trial, n_trials, seed, path, dt=0.1):
@@ -51,7 +51,7 @@ class NestSimulation(Simulation):
                 nest.Connect(self.input_[-len(target)+i], [self.neurons[t]], syn_spec={'delay': self.dt})
 
     def create_synapse(self, syn_params, sources, target, stochastic=False):
-        for i in xrange(len(syn_params["delay"])):
+        for i in range(len(syn_params["delay"])):
             weight = syn_params["weight"][i] if syn_params["weight"][i] > 1e-9 else 0.
             nest_synapse_params = {"model": "tsodyks2_synapse",
                                    "U": syn_params["U"][i],
@@ -84,14 +84,14 @@ class NestSimulation(Simulation):
                                        "V_th": neuron_params["V_th"][i],
                                        "V_reset": neuron_params["V_reset"][i],
                                        "E_L": neuron_params["E_L"][i],
-                                       "V_m": neuron_params["V_m"][i] if "V_m" in neuron_params.keys() else -80.0,
+                                       "V_m": neuron_params["V_m"][i] if "V_m" in list(neuron_params.keys()) else -80.0,
                                        "Delta_T": neuron_params["Delta_T"][i],
                                        "V_peak": neuron_params["V_peak"][i],
                                        "t_ref": neuron_params["t_ref"][i],
                                        "a": neuron_params["a"][i],
                                        "b": neuron_params["b"][i],
                                        "tau_w": neuron_params["tau_w"][i],
-                                       "I_e": neuron_params["I_e"][i] if "I_e" in neuron_params.keys() else 0.,
+                                       "I_e": neuron_params["I_e"][i] if "I_e" in list(neuron_params.keys()) else 0.,
                                        # "w": 20.
                                        })
         neurons = nest.Create("aeif_cond_beta_multisynapse", number, nest_neuron_params)

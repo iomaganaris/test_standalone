@@ -6,6 +6,7 @@ from simulation import Simulation
 
 _loaded = False
 
+
 class NeuronSimulation(Simulation):
     def __init__(self, t_trial, n_trials, seed, path, dt=0.05, do_parallel=False):
         Simulation.__init__(self, dt, t_trial, n_trials, seed)
@@ -49,7 +50,7 @@ class NeuronSimulation(Simulation):
             self._gif_fun[gid].V_th = neuron_params["V_th"][i]
             self._gif_fun[gid].V_reset = neuron_params["V_reset"][i]
             self._gif_fun[gid].E_L = neuron_params["E_L"][i]
-            self._gif_fun[gid].V_M = neuron_params["V_m"][i] if "V_m" in neuron_params.keys() else -80.0
+            self._gif_fun[gid].V_M = neuron_params["V_m"][i] if "V_m" in list(neuron_params.keys()) else -80.0
             self._gif_fun[gid].Delta_T = neuron_params["Delta_T"][i]
             self._gif_fun[gid].V_peak = neuron_params["V_peak"][i]
             self._gif_fun[gid].t_ref = neuron_params["t_ref"][i]
@@ -153,7 +154,6 @@ class NeuronSimulation(Simulation):
         with open(filename, "w") as spk_file:
             # for (k,t) in zip(self.spikes[0], self.spikes[1]):
             #     spk_file.write('%d\t%.3f\n' %(k, t))
-            import operator
             result = []
             for gid, spikes in self.spikes.items():
                 for spike in spikes:
@@ -163,13 +163,12 @@ class NeuronSimulation(Simulation):
 
     def voltage_to_file(self, filename):
         with open(filename, "w") as volt_file:
-            import operator
             result = []
             for gid, voltages in self.v_m.items():
-                for ti, voltage in enumerate(voltages):
-                    result.append((gid, self.sim_time[ti], voltage))
-            for (k,t) in sorted(result, key=operator.itemgetter(1)):
-                volt_file.write('%d\t%.3f\n' %(k, t))
+                for ti, voltage in enumerate(voltages[0]):
+                    result.append((gid, self.sim_time[gid][ti], voltage))
+            for (k, t, v) in sorted(result, key=operator.itemgetter(1)):
+                volt_file.write('%d\t%.3f\t%.3f\n' %(k, t, v))
 
     def run(self):
         self.reset()

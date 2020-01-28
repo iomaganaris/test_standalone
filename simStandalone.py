@@ -106,7 +106,7 @@ def simulate(seed,  # random seed
         return
     neuron_parameters = {}
     for row in result:
-        if row[1] in neuron_parameters.keys():
+        if row[1] in list(neuron_parameters.keys()):
             neuron_parameters[row[1]] = np.vstack([neuron_parameters[row[1]], [float(row[0])]*tested_gid.size])
         else:
             neuron_parameters[row[1]] = [float(row[0])]*tested_gid.size
@@ -161,7 +161,7 @@ def simulate(seed,  # random seed
                 'weight': [params[i,3]],
                 'receptor_type': [params[i,4]]
             }
-            nest_sim.create_synapse(pre_synaptic_parameters, nest_sim.source.keys(), tested_gid[i])
+            nest_sim.create_synapse(pre_synaptic_parameters, list(nest_sim.source.keys()), tested_gid[i])
     else:
         params = None
         for i in range(tested_gid.size):
@@ -233,7 +233,7 @@ def load_neuron(seed, t_trial, n_trials, dt, gifs, presyn_params, postsyn_params
                     'receptor_type': [synapse[4]]
                 }
                 # print(pre_synaptic_parameters)
-                nrn_sim.create_synapse(pre_synaptic_parameters, nrn_sim.source.keys(), gifs["gid"][i])
+                nrn_sim.create_synapse(pre_synaptic_parameters, list(nrn_sim.source.keys()), gifs["gid"][i])
                 j += 1
         else:
             for i, target in enumerate(gifs["gid"]):
@@ -276,7 +276,6 @@ def save_output(simulations, step_current, loadtime):
     print("---------------------------- Store output data ------------------------------")
     first_sim = simulations.values()[0]
     parameters = dict()
-    parameters['git_hash'] = GIT_HASH
     parameters['sim_date'] = DATE
     parameters['seed'] = first_sim.seed
     parameters['t_trial'] = first_sim.t_trial
@@ -286,7 +285,6 @@ def save_output(simulations, step_current, loadtime):
     parameters['runtime'] = dict()
 
     with h5py.File(OUTPUT_FOLDER + '/simulation.h5', 'w') as f:
-        f.attrs['git_hash'] = GIT_HASH
         f.attrs['sim_date'] = DATE
         input_group = f.create_group('input')
         input_group.attrs['seed'] = first_sim.seed

@@ -87,7 +87,13 @@ def simulate(Dver,  # version of the Brain model
         request = "select id from regions where is_leaf=1 AND (full_name like '%"+("%' OR full_name like '%").join(regions) + "%')"
         cursor.execute(request)
         regions_ids = np.array(cursor.fetchall())[:,0]
-        gid_reg = h5file['neurons/regions'][:][gids]
+        type_names = ["exc", "inh", "mod"]
+        cellTypes = np.array(h5file['neurons']['cellTypes'])
+        type_ID_to_name = np.array(h5file['neurons']['cellTypesToName'])
+        filter_ = np.zeros(cellTypes.size, dtype=bool)
+        for type_name in type_names:
+            filter_ = np.logical_or(filter_, cellTypes==np.where(type_ID_to_name==type_name.encode('ascii'))[0])
+        gid_reg = np.array(h5file['neurons/regions'])[filter_][gids]
         ids = np.zeros(gids.size, dtype=bool)
         for reg in regions_ids:
             ids = np.logical_or(ids, gid_reg==reg)
@@ -187,7 +193,7 @@ def simulate(Dver,  # version of the Brain model
         if CONN_PRINTING and current_percent > percent_done:
             progress_bar(current_percent, num_created)
             percent_done = current_percent
-        range_ = xrange(start, n_synapses)
+        range_ = range(start, n_synapses)
         curr_id = post_gids[start]
         for i_win in range_:
             if curr_id != post_gids[i_win]:
@@ -195,6 +201,7 @@ def simulate(Dver,  # version of the Brain model
             elif i_win == n_synapses - 1:
                 i_win += 1
         if nest_sim.is_neuron_local(curr_id):
+        # if curr_id in nrn_sim._gif_fun.keys():
             pre_ids = pre_gids[start:i_win]
             local_excitatory = is_excitatory[pre_ids]
             receptors = 3-local_excitatory*2
@@ -249,9 +256,9 @@ def simulate(Dver,  # version of the Brain model
     if rank == 0: print("-------------------------- Run simulation ----------------------------")
     nest_sim.run()
     nrn_sim.run()
-    nrn_sim.process_to_file(join(NRN_OUTPUT, "spike_detector-" + str(rank) + ".gdf"))
+    nrn_sim.spikes_to_file(join(NRN_OUTPUT, "spike_detector-" + str(rank) + ".gdf"))
     if record_potentials:
-        nrn_sim.process_to_file(join(NRN_OUTPUT, "spike_detector-" + str(rank) + ".gdf"))
+        nrn_sim.voltage_to_file(join(NRN_OUTPUT, "multimeter-" + str(rank) + ".gdf"))
 
     if rank == 0: print("--------------------------- Recover output data -----------------------------")
     if save_to_h5:
