@@ -68,12 +68,12 @@ class NestSimulation(Simulation):
                 del nest_synapse_params['x']
                 # nest_synapse_params["n"] = syn_params["n"][i]
 
-            if sources[i] in self.neurons:  # normal neurons
-                nest.Connect([self.neurons[sources[i]]], [self.neurons[target]],
+            if list(sources)[i] in self.neurons:  # normal neurons
+                nest.Connect([self.neurons[list(sources)[i]]], [self.neurons[target]],
                              syn_spec=nest_synapse_params)
 
-            elif sources[i] in self.source:  # parrot neurons
-                nest.Connect(self.source[sources[i]], [self.neurons[target]], syn_spec=nest_synapse_params)
+            elif list(sources)[i] in self.source:  # parrot neurons
+                nest.Connect(self.source[list(sources)[i]], [self.neurons[target]], syn_spec=nest_synapse_params)
 
     def create_adex_neuron(self, neuron_params):
         nest_neuron_params = []
@@ -116,7 +116,7 @@ class NestSimulation(Simulation):
             params["to_file"] = True
         multimeter = nest.Create("multimeter", 1, params=params)
 
-        nest.Connect(multimeter, recording_point.values(), syn_spec={"delay": self.dt})
+        nest.Connect(multimeter, list(recording_point.values()), syn_spec={"delay": self.dt})
         self.multimeter.append(multimeter)
 
     def get_multimeters_filenames(self):
@@ -128,7 +128,7 @@ class NestSimulation(Simulation):
             params["to_memory"] = False
             params["to_file"] = True
         multimeter = nest.Create("spike_detector", 1, params=params)
-        nest.Connect(recording_point.values(), multimeter, syn_spec={'delay': self.dt})
+        nest.Connect(list(recording_point.values()), multimeter, syn_spec={'delay': self.dt})
         self.multimeter.append(multimeter)
         for gid in recording_point.keys():
             self.spikes[gid] = []

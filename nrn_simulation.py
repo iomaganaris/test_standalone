@@ -85,23 +85,23 @@ class NeuronSimulation(Simulation):
         nb_synapses_ = len(syn_params["delay"])
         id_syn = self._gif_fun[target].initSynapse(nb_synapses_)
         for i in range(nb_synapses_):
-            if sources[i] in self.neurons or sources[i] in self.source:
+            if list(sources)[i] in self.neurons or list(sources)[i] in self.source:
                 weight = syn_params["weight"][i] if syn_params["weight"][i] > 1e-9 else 0.
                 self._gif_fun[target].addSynapse(id_syn+i, weight, 
                                                  syn_params["tau_rec"][i], syn_params["tau_fac"][i], 
                                                  syn_params["U"][i], syn_params["delay"][i], # Delay used for last_spike to match Nest
                                                  syn_params["x"][i], syn_params["u"][i]) 
 
-                if sources[i] in self.neurons:
-                    connection = h.NetCon(self._gif_fun[sources[i]]._ref_spike, self._gif_fun[target], sec=self.neurons[sources[i]])
-                elif sources[i] in self.source:
-                    connection = h.NetCon(self.source[sources[i]], self._gif_fun[target])
+                if list(sources)[i] in self.neurons:
+                    connection = h.NetCon(self._gif_fun[list(sources)[i]]._ref_spike, self._gif_fun[target], sec=self.neurons[list(sources)[i]])
+                elif list(sources)[i] in self.source:
+                    connection = h.NetCon(self.source[list(sources)[i]], self._gif_fun[target])
                 connection.weight[0] = id_syn+i
                 connection.weight[1] = syn_params["receptor_type"][i] - 1
                 connection.delay = syn_params["delay"][i]+self.dt
-                if sources[i] not in self.synapses:
-                    self.synapses[sources[i]] = []
-                self.synapses[sources[i]].append(connection)
+                if list(sources)[i] not in self.synapses:
+                    self.synapses[list(sources)[i]] = []
+                self.synapses[list(sources)[i]].append(connection)
 
     def create_multimeter(self, recording_point):
         for k,v in recording_point.items():
