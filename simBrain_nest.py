@@ -24,8 +24,6 @@ SIM_NAME = "Whole_Brain" if len(sys.argv)<3 else sys.argv[2]
 CONN_PRINTING = True
 ROOT_FOLDER = dirname(realpath(__file__))
 OUTPUT_FOLDER = join(ROOT_FOLDER, "save",Dver, SIM_NAME)
-NEURON_MOD_FOLDER = join(ROOT_FOLDER, "NEURON")
-NRN_OUTPUT = join(OUTPUT_FOLDER, "neuron_output")
 NEST_OUTPUT = join(OUTPUT_FOLDER, "nest_output")
 HIGHD_FOLDER = ROOT_FOLDER
 
@@ -51,7 +49,6 @@ def main():
         try:
             if exists(OUTPUT_FOLDER):
                 shutil.rmtree(OUTPUT_FOLDER)
-            makedirs(NRN_OUTPUT)
             makedirs(NEST_OUTPUT)
             status = True
         except Exception as e:
@@ -79,7 +76,6 @@ def simulate(Dver,  # version of the Brain model
     start_time = time.time()
     if rank == 0: print("------------------------- Initializing Nest Simulator -------------------------")
     nest_sim =  NestSimulation(t_trial, n_trials, seed, NEST_OUTPUT, dt)
-    nrn_sim = NeuronSimulation(t_trial, n_trials, seed, NEURON_MOD_FOLDER, dt, True)
     h5file = h5py.File(file_, "r")
     gids = np.array(h5file["/neurons/default/gid"])
     ids = np.ones(gids.size, dtype=bool)
@@ -87,7 +83,13 @@ def simulate(Dver,  # version of the Brain model
         request = "select id from regions where is_leaf=1 AND (full_name like '%"+("%' OR full_name like '%").join(regions) + "%')"
         cursor.execute(request)
         regions_ids = np.array(cursor.fetchall())[:,0]
-        gid_reg = h5file['neurons/regions'][:][gids]
+        type_names = ["exc", "inh", "mod"]
+        cellTypes = np.array(h5file['neurons']['cellTypes'])
+        type_ID_to_name = np.array(h5file['neurons']['cellTypesToName'])
+        filter_ = np.zeros(cellTypes.size, dtype=bool)
+        for type_name in type_names:
+            filter_ = np.logical_or(filter_, cellTypes==np.where(type_ID_to_name==type_name.encode('ascii'))[0])
+        gid_reg = np.array(h5file['neurons/regions'])[filter_][gids]
         ids = np.zeros(gids.size, dtype=bool)
         for reg in regions_ids:
             ids = np.logical_or(ids, gid_reg==reg)
@@ -113,7 +115,6 @@ def simulate(Dver,  # version of the Brain model
     is_excitatory[np.where(is_excitatory<0)] = 0
     is_excitatory[np.where(is_excitatory>1)] = 1 # Force modulatory neurons to be excitatory
     nest_sim.create_adex_neuron(neuron_parameters)
-    nrn_sim.create_adex_neuron(neuron_parameters)
     if rank == 0:
         with open(OUTPUT_FOLDER + '/conversion.json', 'w') as f:
             json.dump(nest_sim.neurons, f, indent=4)
@@ -141,7 +142,6 @@ def simulate(Dver,  # version of the Brain model
         for i, gid in enumerate(StimulationIDs):
             target = nest_sim.create_parrot_neuron(gid)
             nest_sim.create_current_input(spike_times[i], target)
-            nrn_sim.create_current_input(spike_times[i], gid)
             for j in spike_times[i]:
                 f.write(str(j)+"\t"+str(gid)+"\n")
 
@@ -187,7 +187,7 @@ def simulate(Dver,  # version of the Brain model
         if CONN_PRINTING and current_percent > percent_done:
             progress_bar(current_percent, num_created)
             percent_done = current_percent
-        range_ = xrange(start, n_synapses)
+        range_ = range(start, n_synapses)
         curr_id = post_gids[start]
         for i_win in range_:
             if curr_id != post_gids[i_win]:
@@ -195,6 +195,7 @@ def simulate(Dver,  # version of the Brain model
             elif i_win == n_synapses - 1:
                 i_win += 1
         if nest_sim.is_neuron_local(curr_id):
+        # if curr_id in nrn_sim._gif_fun.keys():
             pre_ids = pre_gids[start:i_win]
             local_excitatory = is_excitatory[pre_ids]
             receptors = 3-local_excitatory*2
@@ -213,17 +214,14 @@ def simulate(Dver,  # version of the Brain model
                 'receptor_type': receptors
             }
             nest_sim.setStatus(nest_sim.neurons[curr_id], postsyn_params)
-            nrn_sim.set_receptors(curr_id, postsyn_params)
 
             nest_sim.create_synapse(pre_synaptic_parameters, pre_ids, curr_id)
-            nrn_sim.create_synapse(pre_synaptic_parameters, pre_ids, curr_id)
             receptors += 1
             weights[np.where(receptors == 2)] *= 0.4 + 0.4 * (1-is_excitatory[curr_id])
             weights[np.where(receptors == 4)] *= 0.75 * is_excitatory[curr_id]
             pre_synaptic_parameters['weight'] = weights.tolist()
             pre_synaptic_parameters['receptor_type'] = receptors.tolist()
             nest_sim.create_synapse(pre_synaptic_parameters,pre_ids, curr_id)
-            nrn_sim.create_synapse(pre_synaptic_parameters, pre_ids, curr_id)
             num_created +=2*(i_win-start)
         start = i_win
     if CONN_PRINTING:
@@ -236,37 +234,27 @@ def simulate(Dver,  # version of the Brain model
     # nest_sim.create_background_noise(0.5, nest_sim.neurons)
     if rank == 0: print("-------------------------- Create spike detector ----------------------------")
     nest_sim.create_spike_detector(nest_sim.neurons)
-    nrn_sim.create_spike_detector(nrn_sim.neurons)
     # nest_sim.create_spike_detector(nest_sim.source)
 
     if record_potentials:
         if rank == 0: print("-------------------------- Create multimeter ----------------------------")
         nest_sim.create_multimeter(nest_sim.neurons)
-        nrn_sim.create_multimeter(nrn_sim.neurons)
     comm.Barrier()
     loadtime = time.time() - start_time
     if rank == 0: print("Loading time: " + str(loadtime))
     if rank == 0: print("-------------------------- Run simulation ----------------------------")
     nest_sim.run()
-    nrn_sim.run()
-    nrn_sim.process_to_file(join(NRN_OUTPUT, "spike_detector-" + str(rank) + ".gdf"))
-    if record_potentials:
-        nrn_sim.process_to_file(join(NRN_OUTPUT, "spike_detector-" + str(rank) + ".gdf"))
 
     if rank == 0: print("--------------------------- Recover output data -----------------------------")
     if save_to_h5:
         spikes_list = comm.gather(nest_sim.spikes, root=0)
-        spikes_list_nrn = comm.gather(nrn_sim.spikes, root=0)
 
     if rank == 0:
         print("---------------------------- Store output data ------------------------------")
         if save_to_h5:
             nest_sim.spikes = dict()
-            nrn_sim.spikes = dict()
             for x in spikes_list:
                 nest_sim.spikes.update(x)
-            for x in spikes_list_nrn:
-                nrn_sim.spikes.update(x)
 
             with h5py.File(OUTPUT_FOLDER + '/simulation.h5', 'w') as f:
                 f.attrs['sim_date'] = DATE
@@ -281,7 +269,6 @@ def simulate(Dver,  # version of the Brain model
                 output_group = f.create_group('output')
                 output_group.attrs['loadtime'] = loadtime
                 output_group.attrs['nest_runtime'] = nest_sim.run_time
-                output_group.attrs['nrn_runtime'] = nrn_sim.run_time
                 spikes_group = output_group.create_group("nest_spike_times")
                 for (gid, values) in nest_sim.spikes.items():
                     spikes_group.create_dataset(str(gid), data=np.array(values))
@@ -290,12 +277,7 @@ def simulate(Dver,  # version of the Brain model
                     for neuron in nest_sim.neurons.keys():
                         potential_group.create_dataset(str(neuron), (t_trial * n_trials / dt,), dtype='f8')
                 spikes_group = output_group.create_group("nrn_spike_times")
-                for (gid, values) in nrn_sim.spikes.items():
-                    spikes_group.create_dataset(str(gid), data=np.array(values))
-                if record_potentials:
-                    potential_group = output_group.create_group("membrane_potentials")
-                    for neuron in nrn_sim.neurons.keys():
-                        potential_group.create_dataset(str(neuron), (t_trial * n_trials / dt,), dtype='f8')
+
 
         parameters = dict()
         parameters['sim_date'] = DATE
@@ -305,7 +287,6 @@ def simulate(Dver,  # version of the Brain model
         parameters['n_trials'] = n_trials
         parameters['dt'] = dt
         parameters['nest_runtime'] = nest_sim.run_time
-        parameters['nrn_runtime'] = nrn_sim.run_time
         parameters['loadtime'] = loadtime
         parameters['mpi_size'] = mpi_size
         parameters['param_files'] = file_
@@ -319,8 +300,6 @@ def simulate(Dver,  # version of the Brain model
                 with h5py.File(OUTPUT_FOLDER + '/simulation.h5', 'r+') as f:
                     for (gid, values) in nest_sim.v_m.items():
                         f["/output/nest_membrane_potentials"][str(gid)][:] = np.array(values)
-                    for (gid, values) in nrn_sim.v_m.items():
-                        f["/output/nrn_membrane_potentials"][str(gid)][:] = np.array(values)
 
             comm.Barrier()
 
