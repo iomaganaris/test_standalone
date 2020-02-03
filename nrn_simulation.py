@@ -174,11 +174,11 @@ class NeuronSimulation(Simulation):
         self.reset()
         h.init()
         h.tstop = self.t_trial
-        # print("-------------------------- Run NEURON simulation ----------------------------")
+        if self.id == 0: print("-------------------------- Run NEURON simulation ----------------------------")
         start_time = time.time()
         for i in range(self.n_trials):
             h.run()
             self.extract_values()
         self.run_time = time.time() - start_time
-        # print("-------------------------- End NEURON simulation ----------------------------")
+        if self.id == 0: print("------------------- End NEURON simulation in {} --------------------------".format(str(self.run_time)))
         Simulation.run(self)

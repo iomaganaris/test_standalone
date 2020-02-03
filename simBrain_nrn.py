@@ -77,7 +77,7 @@ def simulate(Dver,  # version of the Brain model
              save_to_h5):
     # n_stochastic = 1
     start_time = time.time()
-    if rank == 0: print("------------------------- Initializing Nest Simulator -------------------------")
+    if rank == 0: print("------------------------- Initializing Neuron Simulator -------------------------")
     # nest_sim =  NestSimulation(t_trial, n_trials, seed, NEST_OUTPUT, dt)
     nrn_sim = NeuronSimulation(t_trial, n_trials, seed, NEURON_MOD_FOLDER, dt, True)
     h5file = h5py.File(file_, "r")
@@ -253,7 +253,7 @@ def simulate(Dver,  # version of the Brain model
     comm.Barrier()
     loadtime = time.time() - start_time
     if rank == 0: print("Loading time: " + str(loadtime))
-    if rank == 0: print("-------------------------- Run simulation ----------------------------")
+    if rank == 0: print("-------------------------- Run simulation ----------------------------", flush=True)
     # nest_sim.run()
     nrn_sim.run()
     nrn_sim.spikes_to_file(join(NRN_OUTPUT, "spike_detector-" + str(rank) + ".gdf"))
