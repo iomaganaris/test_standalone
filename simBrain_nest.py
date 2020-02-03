@@ -7,6 +7,7 @@ from os import makedirs
 from os.path import *
 import numpy as np
 import sys
+from guppy import hpy
 from nest_simulation import NestSimulation
 from mpi4py import MPI # import mpi after nest AND before neuron !!! 
 from nrn_simulation import NeuronSimulation
@@ -243,8 +244,10 @@ def simulate(Dver,  # version of the Brain model
     loadtime = time.time() - start_time
     if rank == 0: print("Loading time: " + str(loadtime))
     if rank == 0: print("-------------------------- Run simulation ----------------------------")
+    h = hpy()
+    print("==== [RANK {}] before nest_sim.run(): {} ====".format(rank, str(h.heap()).partition('\n')[0]), flush=True)
     nest_sim.run()
-
+    print("==== [RANK {}] after nest_sim.run(): {} ====".format(rank, str(h.heap()).partition('\n')[0]), flush=True)
     if rank == 0: print("--------------------------- Recover output data -----------------------------")
     if save_to_h5:
         spikes_list = comm.gather(nest_sim.spikes, root=0)

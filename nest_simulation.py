@@ -203,7 +203,7 @@ class NestSimulation(Simulation):
 
     def run(self):
         self.reset()
-        # print("-------------------------- Run NEST simulation ----------------------------")
+        print("-------------------------- Run NEST simulation ----------------------------")
         start_time = time.time()
         for t in range(self.n_trials):
             t_net = nest.GetKernelStatus('time')
@@ -212,7 +212,7 @@ class NestSimulation(Simulation):
             nest.Simulate(self.t_trial)
         self.run_time = time.time() - start_time
         nest.Simulate(self.dt)
-        # print("-------------------------- End NEST simulation ----------------------------")
+        print("-------------------------- End NEST simulation {} --------------------------".format(str(self.run_time)))
         Simulation.run(self)
 
     def is_neuron_local(self, curr_id):

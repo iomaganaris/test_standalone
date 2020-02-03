@@ -8,6 +8,7 @@ from os.path import *
 import numpy as np
 import sys
 # from nest_simulation import NestSimulation
+from guppy import hpy
 from mpi4py import MPI # import mpi after nest AND before neuron !!! 
 from nrn_simulation import NeuronSimulation
 from simulation import Simulation
@@ -255,7 +256,10 @@ def simulate(Dver,  # version of the Brain model
     if rank == 0: print("Loading time: " + str(loadtime))
     if rank == 0: print("-------------------------- Run simulation ----------------------------", flush=True)
     # nest_sim.run()
+    h = hpy()
+    print("==== [RANK {}] before nrn_sim.run(): {} ====".format(rank, str(h.heap()).partition('\n')[0]), flush=True)
     nrn_sim.run()
+    print("==== [RANK {}] after nrn_sim.run(): {} ====".format(rank, str(h.heap()).partition('\n')[0]), flush=True)
     nrn_sim.spikes_to_file(join(NRN_OUTPUT, "spike_detector-" + str(rank) + ".gdf"))
     if record_potentials:
         nrn_sim.voltage_to_file(join(NRN_OUTPUT, "multimeter-" + str(rank) + ".gdf"))
