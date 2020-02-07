@@ -8,7 +8,7 @@ from os.path import *
 import numpy as np
 import sys
 # from nest_simulation import NestSimulation
-from guppy import hpy
+#import timemory
 from mpi4py import MPI # import mpi after nest AND before neuron !!! 
 from nrn_simulation import NeuronSimulation
 from simulation import Simulation
@@ -25,7 +25,7 @@ SIM_NAME = "Whole_Brain" if len(sys.argv)<3 else sys.argv[2]
 CONN_PRINTING = True
 ROOT_FOLDER = dirname(realpath(__file__))
 OUTPUT_FOLDER = join(ROOT_FOLDER, "save",Dver, SIM_NAME)
-NEURON_MOD_FOLDER = join(ROOT_FOLDER, "NEURON")
+NEURON_MOD_FOLDER = join(ROOT_FOLDER,"mod ")
 NRN_OUTPUT = join(OUTPUT_FOLDER, "neuron_output")
 # NEST_OUTPUT = join(OUTPUT_FOLDER, "nest_output")
 HIGHD_FOLDER = ROOT_FOLDER
@@ -34,6 +34,7 @@ databases_file = join(HIGHD_FOLDER, "ElecDB2.db")
 conn = sqlite3.connect(databases_file)
 cursor = conn.cursor()
 
+#@timemory.util.rss_usage(key="Main", add_args=False, is_class=False)
 def main():
     seed = 75599
     t_trial = 2100.0 # ms
@@ -88,6 +89,7 @@ def simulate(Dver,  # version of the Brain model
         request = "select id from regions where is_leaf=1 AND (full_name like '%"+("%' OR full_name like '%").join(regions) + "%')"
         cursor.execute(request)
         regions_ids = np.array(cursor.fetchall())[:,0]
+        print(*regions_ids)
         type_names = ["exc", "inh", "mod"]
         cellTypes = np.array(h5file['neurons']['cellTypes'])
         type_ID_to_name = np.array(h5file['neurons']['cellTypesToName'])
@@ -117,7 +119,12 @@ def simulate(Dver,  # version of the Brain model
         "t_ref": ([5.0]*len(gids) if "t_ref" not in h5file["/neurons/default"].keys() else np.array(h5file["/neurons/default/t_ref"])[ids].tolist()),  # ms
     }
     is_excitatory = np.array(h5file["/neurons/excitatory"])
+    #print("is excitatory datadet from NEST.h5")
+    #print(*is_excitatory)
     is_excitatory[np.where(is_excitatory<0)] = 0
+    #print("is excitatory > 1")
+    #print(np.where(is_excitatory>1))
+    #exit()
     is_excitatory[np.where(is_excitatory>1)] = 1 # Force modulatory neurons to be excitatory
     # nest_sim.create_adex_neuron(neuron_parameters)
     nrn_sim.create_adex_neuron(neuron_parameters)
@@ -160,12 +167,23 @@ def simulate(Dver,  # version of the Brain model
     #     nrn_sim.create_direct_input(standalone_input, [StimulationIDs[i]])
     start = 0
     post_gids = np.array(h5file["/presyn/default/post_gid"], int)
+    print("post_gids: {}".format(post_gids.size))
     filter_post = np.in1d(post_gids, gids)
+    # Select post_ids that are in in the gids we simulate
     post_gids = post_gids[filter_post]
+    print("post_gids: {}".format(post_gids.size))
+    #print(*post_gids)
     pre_gids = np.array(h5file["/presyn/default/pre_gid"], int)[filter_post]
+    print("pre_gids: {}".format(pre_gids.size))
+    #print(*pre_gids)
+#    exit()
     filter_pre = np.in1d(pre_gids, gids)
     pre_gids = pre_gids[filter_pre]
+    #select pre_ids that are in the gids we simulate
     post_gids = post_gids[filter_pre]
+    # Take gids as post_ids that are also in pre_gids
+    print("post_gids: {}".format(post_gids.size))
+    exit()
 
     n_synapses = len(post_gids)
     comm.Barrier()
@@ -189,25 +207,40 @@ def simulate(Dver,  # version of the Brain model
     postsyn_params = {'E_rev': [0.0, 0.0, -80.0, -97.0],
                      'tau_rise': [0.2, 0.29, 0.2, 3.5],
                      'tau_decay': [1.7, 43.0, 8.0, 260.9]}
+
+    # only get the parameters for the synapse we use
+    # set postsyn_params as standard
+    #
+    # go through all the synapses
     while start < n_synapses:
         current_percent = min(int(float(start) / float(n_synapses) * 100), 100)
         if CONN_PRINTING and current_percent > percent_done:
             progress_bar(current_percent, num_created)
             percent_done = current_percent
+        # range starts from current start until the end of synapses
         range_ = range(start, n_synapses)
+        # current id is the post_gid of the start
         curr_id = post_gids[start]
+        # go through the range
+        # the post_gids are sort in ascending order
         for i_win in range_:
             if curr_id != post_gids[i_win]:
                 break
             elif i_win == n_synapses - 1:
                 i_win += 1
         # if nest_sim.is_neuron_local(curr_id):
+        # for the selected post_gid get parameters of the synapses based on
+        # the pre_ids that need to be connected to them
         if curr_id in nrn_sim._gif_fun.keys():
             pre_ids = pre_gids[start:i_win]
             local_excitatory = is_excitatory[pre_ids]
+            # receptors: 3 if not excitatory
+            # 1 if excitatory
             receptors = 3-local_excitatory*2
             weights = syn_params[4][start:i_win]
+            # indexes here are not excitatory cells
             indexes = np.where(receptors == 3)
+            # get the absolute values of weights for not excitatory cells
             weights[indexes] = np.abs(weights[indexes])
 
             pre_synaptic_parameters = {
@@ -220,17 +253,26 @@ def simulate(Dver,  # version of the Brain model
                 'weight': weights,
                 'receptor_type': receptors
             }
+            print(*pre_synaptic_parameters["receptor_type"])
             # nest_sim.setStatus(nest_sim.neurons[curr_id], postsyn_params)
+            # set postsyn_params for the current gid
             nrn_sim.set_receptors(curr_id, postsyn_params)
 
             # nest_sim.create_synapse(pre_synaptic_parameters, pre_ids, curr_id)
+
+            # connect pre_ids to the current target id (curr_id)
             nrn_sim.create_synapse(pre_synaptic_parameters, pre_ids, curr_id)
             receptors += 1
+            # excitatory cells
             weights[np.where(receptors == 2)] *= 0.4 + 0.4 * (1-is_excitatory[curr_id])
+            # not excitatory cells
             weights[np.where(receptors == 4)] *= 0.75 * is_excitatory[curr_id]
             pre_synaptic_parameters['weight'] = weights.tolist()
             pre_synaptic_parameters['receptor_type'] = receptors.tolist()
+
             # nest_sim.create_synapse(pre_synaptic_parameters,pre_ids, curr_id)
+
+            # Why update synaptic parameters and create more synapses?
             nrn_sim.create_synapse(pre_synaptic_parameters, pre_ids, curr_id)
             num_created +=2*(i_win-start)
         start = i_win
@@ -256,10 +298,7 @@ def simulate(Dver,  # version of the Brain model
     if rank == 0: print("Loading time: " + str(loadtime))
     if rank == 0: print("-------------------------- Run simulation ----------------------------", flush=True)
     # nest_sim.run()
-    h = hpy()
-    print("==== [RANK {}] before nrn_sim.run(): {} ====".format(rank, str(h.heap()).partition('\n')[0]), flush=True)
     nrn_sim.run()
-    print("==== [RANK {}] after nrn_sim.run(): {} ====".format(rank, str(h.heap()).partition('\n')[0]), flush=True)
     nrn_sim.spikes_to_file(join(NRN_OUTPUT, "spike_detector-" + str(rank) + ".gdf"))
     if record_potentials:
         nrn_sim.voltage_to_file(join(NRN_OUTPUT, "multimeter-" + str(rank) + ".gdf"))
@@ -349,4 +388,6 @@ def progress_bar(current_percent, num_created):
 
 
 if __name__ == '__main__':
+    print("Memory usage in the beginning of the simulation: "+NeuronSimulation.report_memory())
     main()
+    print("Memory usage at the end of the simulation: "+NeuronSimulation.report_memory())
